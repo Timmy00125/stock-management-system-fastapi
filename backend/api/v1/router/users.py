@@ -28,18 +28,33 @@ async def register_user(
     user_operation = UserController(db)
     data = user_operation.register_user(user)
     access_token = authorize.create_access_token(user.email)
-    email_controller = email.Email()
-    email_controller.send_email_background(
-        background_task=background_task,
-        subject="Verify Your Account",
-        to=data.get("email"),
-        content={
-            "title": "Verify Your Account",
-            "content": "Please verify your account by clicking the button below. Link expires in 3 mins",
-            "name": f"Hi {data.get('first_name').capitalize()}!",
-            "endpoint": f"{settings.SERVER_NAME}{settings.API_PREFIX}/users/verify/email?token={access_token}",
-        },
-    )
+
+    if not settings.TESTING:
+        email_controller = email.Email()
+        email_controller.send_email_background(
+            background_task=background_task,
+            subject="Verify Your Account",
+            to=data.get("email"),
+            content={
+                "title": "Verify Your Account",
+                "content": "Please verify your account by clicking the button below. Link expires in 3 mins",
+                "name": f"Hi {data.get('first_name').capitalize()}!",
+                "endpoint": f"{settings.SERVER_NAME}{settings.API_PREFIX}/users/verify/email?token={access_token}",
+            },
+        )
+    else:
+        # If in TESTING mode, automatically verify the user and create their account
+        user_id = user_operation.verify_email(data.get("email"))
+        account_operation = AccountController(db)
+        account_operation.create_account(user_id)
+        # Optionally, you might want to adjust the response message for testing mode
+        return responses.JSONResponse(
+            {
+                "message": "User created and auto-verified (TESTING MODE)",
+                "data": data,
+            }
+        )
+
     return responses.JSONResponse(
         {
             "message": "User created successfully",
